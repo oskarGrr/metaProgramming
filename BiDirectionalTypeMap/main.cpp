@@ -1,77 +1,123 @@
 #include <iostream>
-#include <cstdint>
+#include <vector>
+#include <utility>//std::integer_sequence, std::make_index_sequence
+#include <type_traits>//std::integral_constant
 
-typedef uint64_t index_t;
+#include <thread>
 
-template <index_t index, typename T> 
+//Below is a bi-directional compile time type to integer map.
+
+//Use the map like this to automatically combine types with 
+//indicies / integer sequence 0, 1, 2, 4 etc:
+/*
+
+//These types will be automatically paired up like this:
+//int will be paired with 0, std::vector<int> will be paired with 1,
+//bool will be paired with 2, and unsigned int will be paired with 4.
+#define TYPE_REGISTRY TypeRegistry<int, std::vector<int>, bool, unsigned>
+
+//Get the type mapped to the given index.
+template <size_t idx>
+using GetTypeFromIndex = TYPE_REGISTRY::IndexedMap::type<idx>;
+
+//Get the index mapped to the given type.
+template <typename T>
+static auto GetIndexFromType = TYPE_REGISTRY::IndexedMap::index<T>;
+
+*/
+
+//Or use the map like this to combine types to specific integer IDs:
+/*
+
+#define TYPE_REGISTRY_COMBINE \
+        TypeRegistry <int, char, bool, float > :: \    <- the types in the map
+        CombineWith  <4,   12,    4,   13    >         <- the integers IDs they are paired with
+
+//Get the type mapped to ID.
+template <size_t ID> 
+using GetType = TYPE_REGISTRY_COMBINE::Map::type<ID>
+
+//Get the ID mapped to T.
+template <typename T>
+static auto getID = TYPE_REGISTRY_COMBINE::Map::index<T>
+
+*/
+
+template <size_t index, typename T> 
 struct IntegerTypePair
 { 
     using type = T;
-    static constexpr index_t integer = index;
+    static constexpr size_t integer = index;
 
     static IntegerTypePair getPairFromIndex(
-        std::integral_constant<index_t, integer>) {return {};}
+        std::integral_constant<size_t, integer>) {return {};}
 
     static IntegerTypePair getPairFromType(T) {return {};}
 };
 
 template <typename ...IDTypePairs> 
-struct BiDirectionalIndexTypeMap : IDTypePairs...
+struct BiDirectionalMap : IDTypePairs...
 {
     using IDTypePairs::getPairFromIndex...;
     using IDTypePairs::getPairFromType...;
 
-    template <index_t ID>
+    template <size_t ID>
     using type = typename decltype(
-        getPairFromIndex(std::integral_constant<index_t, ID>{}))::type;
+        getPairFromIndex(std::integral_constant<size_t, ID>{}))::type;
 
     template <typename T>
-    static constexpr index_t index = decltype(
+    static constexpr size_t index = decltype(
         getPairFromType(T{}))::integer;
 };
 
-template <typename ...Ts> 
+template <typename ...Ts>
 struct TypeRegistry
 {
-    static constexpr size_t maxNumTypes{64};
-    static constexpr size_t numTypes{sizeof...(Ts)};
-
-    static_assert(sizeof...(Ts) < maxNumTypes,
-        "Exceeded maximum number of types");
-
-    template <index_t ...IDs> 
+    template <size_t ...IDs>
     struct CombineWith 
     { 
+        static constexpr size_t maxNumTypes{64};
+        static constexpr size_t numTypes{sizeof...(Ts)};
+
+        static_assert(sizeof...(Ts) < maxNumTypes,
+            "Exceeded maximum number of types");
+
         static_assert(sizeof...(Ts) == sizeof...(IDs), 
             "There are mismatching Types to IDs in the TypeRegistry");
 
-        using Map = BiDirectionalIndexTypeMap<IntegerTypePair<IDs, Ts>...>;
+        using Map = BiDirectionalMap<IntegerTypePair<IDs, Ts>...>;
     };
+
+    template <typename T, T... indecies>
+    static auto createIndexedMap(std::integer_sequence<T, indecies...>) 
+        -> BiDirectionalMap<IntegerTypePair<indecies, Ts>...> {return {};}
+
+    using IndexedMap = decltype(createIndexedMap(
+        std::make_index_sequence<sizeof...(Ts)>{}));
 };
 
-//Below are the two meta functions for a map that looks like:
-// <int, char, bool, float>
-// <0,   1,    2,    3    >
+//Below are the meta-functions that are described in the comment at the top of the file.
 
-//Get the type mapped to ID.
-template <size_t ID> 
-using GetType = 
-TypeRegistry <int, char, bool, float> ::
-CombineWith  <0,   1,    2,    3    > ::Map::type<ID>;
+//The IndexedMap in the type registry will automatically pair 0 with int,  
+//1 with std::vector<int>, 2 with bool, 3 with unsigned int, and 4 with std::thread.
+#define TYPE_REGISTRY TypeRegistry<int, std::vector<int>, bool, unsigned, std::thread>
 
-//Get the ID mapped to T.
+//Get the type mapped to the given index.
+template <size_t idx>
+using GetTypeFromIndex = TYPE_REGISTRY::IndexedMap::type<idx>;
+
+//Get the index mapped to the given type.
 template <typename T>
-static index_t getID = 
-TypeRegistry <int, char, bool, float> ::
-CombineWith  <0,   1,    2,    3    > ::Map::index<T>;
+static auto GetIndexFromType = TYPE_REGISTRY::IndexedMap::index<T>;
 
 int main()
 {
-    std::cout << "1 is mapped to: " << typeid(GetType<1>).name() << '\n';
-    std::cout << "char is mapped to: " << getID<char> << "\n\n";
+    //The integer 2 will be mapped to the type bool at compile time.
+    GetTypeFromIndex<2> a;
+    std::cout << typeid(a).name();
 
-    std::cout << "3 is mapped to: " << typeid(GetType<3>).name() << '\n';
-    std::cout << "bool is mapped to: " << getID<bool> << '\n';
+    std::cout << " ";
 
-    return 0;
+    //The type std::vector<int> will be mapped to the integer 1 at compile time.
+    std::cout << GetIndexFromType< std::vector<int> >;
 }
