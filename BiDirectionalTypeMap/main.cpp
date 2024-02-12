@@ -13,7 +13,7 @@
 
 //These types will be automatically paired up like this:
 //int will be paired with 0, std::vector<int> will be paired with 1,
-//bool will be paired with 2, and unsigned int will be paired with 4.
+//bool will be paired with 2, and unsigned int will be paired with 3.
 #define TYPE_REGISTRY TypeRegistry<int, std::vector<int>, bool, unsigned>
 
 //Get the type mapped to the given index.
@@ -31,7 +31,7 @@ static auto GetIndexFromType = TYPE_REGISTRY::IndexedMap::index<T>;
 
 #define TYPE_REGISTRY_COMBINE \
         TypeRegistry <int, char, bool, float > :: \    <- the types in the map
-        CombineWith  <4,   12,    4,   13    >         <- the integers IDs they are paired with
+        CombineWith  <4,   12,   4,    13    >         <- the integers IDs they are paired with
 
 //Get the type mapped to ID.
 template <size_t ID> 
